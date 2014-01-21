@@ -1,0 +1,120 @@
+<html>
+   <head>
+      <script type="text/javascript">
+         //add foreach functionality to nodelist objects
+         NodeList.prototype.forEach = Array.prototype.forEach;
+         HTMLCollection.prototype.forEach = Array.prototype.forEach;
+         //get cross-browser compatible url object
+         window.URL = window.URL || window.webkitURL;
+         //get cross-browser compatible getUserMedia object
+         navigator.getUserMedia  = navigator.getUserMedia || navigator.webkitGetUserMedia ||
+                                   navigator.mozGetUserMedia || navigator.msGetUserMedia;
+
+      </script>
+      <script type="text/javascript" src="whammy.js" ></script>
+   </head>
+   <body>
+      <h3>Web-cam recording tool</h3>
+      <p style="width:60%">
+         This tool will record your webcam feed by taking a snap-shot at regular intervals. A log of all snapshots taken will be shown on the right. Once you stop the video, either the video or the snapshots will be appended below the log. <b>This has only been tested using Chrome 24</b>
+      </p>
+      <p>
+         Refresh the page to after each test.
+      </p>
+      <input type="checkbox" id="convertToVideo" checked onChange="convertToVideo = this.checked"/><label style="margin:20px;" for="convertToVideo">Convert Snapshots To Video</label>
+      <br>
+      <input type="checkbox" id="recordAsOftenAsPossible" onChange="recordAsOftenAsPossible=this.checked; if(this.checked)document.querySelector('#recordingPeriodInput').setAttribute('disabled'); else document.querySelector('#recordingPeriodInput').removeAttribute('disabled');"/><label style="margin:20px;" for="recordAsOftenAsPossible">Record as often as possible</label>
+      <label style="margin:20px;">Recording Period</label><input type="number" id="recordingPeriodInput" value = 1000 onChange="updateRecordingPeriod(this);" disabled />ms
+      <br>
+      <input type="button" onclick="startRecording()" value="Record" disabled/>
+      <input type="button" onclick="stopRecording()" value="Stop" disabled/>
+      <br>
+      <video id="sourcevid" onloadedmetadata="videoReady();" autoplay>Put your fallback message here.</video>
+      <canvas style="display:none"></canvas>
+      <div style="width:400px; min-height:100%; outline:thick solid black; position:absolute; top:10px; right:10px">Log<br></div>
+
+      <script>
+      
+        var mediaReady = false;
+        var recordAsOftenAsPossible = false;
+        var convertToVideo = true;
+        var recordingStart = 0;
+        var recordingInterval;
+        var recordingPeriod = 1000;
+        var cw, ch;
+        var recordString;
+        var snapShots = [];
+        var snapShotTimes = [];
+        var video = document.querySelector('video');
+        var canvas = document.querySelector('canvas');
+        var context = canvas.getContext("2d");
+        var log = document.querySelector('div');
+
+        var updateRecordingPeriod = function(el){
+           recordingPeriod = parseFloat(el.value);
+           el.value = recordingPeriod;
+        }
+        var logEvent = function(html){
+            var li = document.createElement('li');
+            li.innerHTML = '<label>'+((new Date()).getTime() - recordingStart)+'ms: </label>'+html;
+            log.appendChild(li);
+        }
+        var videoReady = function(){
+            logEvent('User Camera Feed Acquired!');
+            document.querySelectorAll('input').forEach(function(e,i,a){e.removeAttribute('disabled')});
+            mediaReady = true;
+            canvas.width = 400;
+            canvas.height = (400*(video.videoHeight/video.videoWidth));
+            cw = canvas.width;
+            ch = canvas.height;
+        }
+        var startRecording = function(){
+            if(!recordingInterval){
+               if(recordAsOftenAsPossible){
+                  recordingInterval = window.requestAnimationFrame(record);
+               }
+               else{
+                  recordingInterval = window.setInterval(record, recordingPeriod);
+               }
+               recordingStart = (new Date()).getTime();
+               logEvent('Recording started');
+            }
+        }
+        var stopRecording = function(){
+            window.cancelAnimationFrame(recordingInterval);
+            window.clearInterval(recordingInterval);
+            recordingInterval = null;
+            var html = '';
+            if(convertToVideo){
+              var webmBlob = Whammy.fromImageArray(snapShots, 1000 / 60);
+              var video = document.createElement('video');
+              video.src = window.URL.createObjectURL(webmBlob); 
+              log.appendChild(video);
+              video.loop = true;
+              video.play();
+            }
+            else{
+               snapShots.forEach(function(e,i,a){
+                  html += (snapShotTimes[i] - recordingStart)+'ms';
+                  html += '<img src="'+e+'"></img><br>';
+               });
+               logEvent('<h3>:images:</h3> '+html);
+            }
+        }
+        var record = function(){
+            logEvent('creating snapshot');
+            context.drawImage(video, 0, 0, cw, ch);
+            snapShots.push(canvas.toDataURL("image/webp"));
+            snapShotTimes.push((new Date()).getTime());
+            logEvent('snapshot saved');
+            if(recordAsOftenAsPossible) recordingInterval = window.requestAnimationFrame(record);
+        }
+        var onFailSoHard = function(e) {
+          console.log('Reeeejected!', e);
+        };
+        navigator.getUserMedia({video: true}, function(localMediaStream) {
+          video.src = window.URL.createObjectURL(localMediaStream);
+        }, onFailSoHard);
+</script>
+   </body>
+</html>
